@@ -10,10 +10,8 @@ backend/venv/
 backend/.env
 
 # VS Code
-.vscode/
+backend/.vscode/
 
 # Logs
 *.log
 
-# macOS
-.DS_Store
