@@ -20,8 +20,8 @@ def _create_access_token(user_id):
     payload = {
         "sub": user_id,
         "iat": datetime.utcnow(),
-        # token expiration "exp" set to 1 minute for testing purposes; adjust as needed for production
-        "exp": datetime.utcnow() + timedelta(minutes=1),   
+        # token expiration "exp" set to 1 day for testing purposes; adjust as needed for production
+        "exp": datetime.utcnow() + timedelta(days=1),   
     }
     return jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
 

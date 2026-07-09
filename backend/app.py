@@ -11,8 +11,9 @@ db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 
-from models import User, Chama, MemberProfile, AuditTrail, Chama # noqa: F401
+from models import User, Chama, JoinRequest, ChamaCreationRequest, ChamaAccount, LedgerEntry, MemberProfile, AuditTrail # noqa: F401
 from routes.auth import auth_bp
+from routes.tenant import tenant_bp
 
 def create_app(config_class=None):
     app = Flask(__name__)
@@ -32,7 +33,7 @@ def create_app(config_class=None):
     CORS(app)
 
     app.register_blueprint(auth_bp)
-
+    app.register_blueprint(tenant_bp)
     @app.route("/")
     def index():
         return {"message": "ChamaPlus backend is running"}

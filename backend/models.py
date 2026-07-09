@@ -37,6 +37,8 @@ class User(BaseModel):
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
 
     member_profiles = db.relationship("MemberProfile", back_populates="user", cascade="all, delete-orphan")
+    chama_creation_requests = db.relationship("ChamaCreationRequest", back_populates="requested_by_user", foreign_keys="ChamaCreationRequest.requested_by", cascade="all, delete-orphan")
+    join_requests = db.relationship("JoinRequest", back_populates="user", foreign_keys="JoinRequest.user_id", cascade="all, delete-orphan")
     audit_trails = db.relationship("AuditTrail", back_populates="user", cascade="all, delete-orphan")
     chamas_created = db.relationship("Chama", back_populates="created_by_user", foreign_keys="Chama.created_by")
 
@@ -67,6 +69,7 @@ class Chama(BaseModel):
     chama_accounts = db.relationship("ChamaAccount", back_populates="chama", cascade="all, delete-orphan")
     ledger_entries = db.relationship("LedgerEntry", back_populates="chama", cascade="all, delete-orphan")
     audit_trails = db.relationship("AuditTrail", back_populates="chama", cascade="all, delete-orphan")
+    join_requests = db.relationship("JoinRequest", back_populates="chama", cascade="all, delete-orphan")
 
 
 class MemberProfile(BaseModel):
@@ -84,6 +87,44 @@ class MemberProfile(BaseModel):
     chama = db.relationship("Chama", back_populates="member_profiles")
     ledger_entries = db.relationship("LedgerEntry", back_populates="member", cascade="all, delete-orphan")
     audit_trails = db.relationship("AuditTrail", back_populates="member", cascade="all, delete-orphan")
+
+
+class JoinRequest(BaseModel):
+    __tablename__ = "join_requests"
+    __table_args__ = (db.UniqueConstraint("user_id", "chama_id", "status", name="uq_active_join_request"),)
+
+    user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
+    chama_id = db.Column(db.String(36), db.ForeignKey("chamas.id"), nullable=False)
+    status = db.Column(db.String(20), default="PENDING", nullable=False)
+    requested_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    reviewed_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
+    remarks = db.Column(db.Text, nullable=True)
+
+    user = db.relationship("User", back_populates="join_requests", foreign_keys=[user_id])
+    chama = db.relationship("Chama", back_populates="join_requests")
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by])
+
+
+class ChamaCreationRequest(BaseModel):
+    __tablename__ = "chama_creation_requests"
+
+    requested_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    chama_type = db.Column(db.String(50), nullable=False)
+    default_contribution_amount = db.Column(db.Numeric(12, 2), nullable=True)
+    creator_role = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), default="PENDING", nullable=False)
+    approved_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    requested_by_user = db.relationship(
+        "User",
+        back_populates="chama_creation_requests",
+        foreign_keys=[requested_by],
+    )
+    approved_by_user = db.relationship("User", foreign_keys=[approved_by])
 
 
 class ChamaAccount(BaseModel):
@@ -148,7 +189,7 @@ class AuditTrail(BaseModel):
 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
-    chama_id = db.Column(db.String(36), db.ForeignKey("chamas.id"), nullable=False)
+    chama_id = db.Column(db.String(36), db.ForeignKey("chamas.id"), nullable=True)
     member_id = db.Column(db.String(36), db.ForeignKey("member_profiles.id"), nullable=True)
     role = db.Column(db.String(100), nullable=True)
     ip_address = db.Column(db.String(100), nullable=True)
