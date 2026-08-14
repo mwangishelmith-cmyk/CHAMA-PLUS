@@ -7,7 +7,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import db
+from extensions import db
 from models import AuditTrail, Chama, ChamaAccount, ChamaCreationRequest, JoinRequest, LedgerEntry, MemberProfile, User
 from routes.auth import token_required
 
@@ -200,6 +200,21 @@ def approve_chama_request(request_id, current_user=None):
         )
         db.session.add(chama)
 
+        db.session.flush()  # Flush to get chama.id before creating the linked account and membership.
+
+        account = ChamaAccount(
+            chama_id=chama.id,
+            account_name="Main Chama Account",
+            institution_name=None,
+            account_type="CASH/MPESA",
+            account_number=None,
+            opening_balance=Decimal("0.00"),
+            current_balance=Decimal("0.00"),
+            is_primary=True,
+            is_active=True,
+        )
+
+        db.session.add(account)
         # Flush first so the database assigns chama.id before we create the linked creator membership.
         db.session.flush()
 
@@ -509,7 +524,7 @@ def add_member(chama_id, current_user=None):
 @tenant_bp.route("/chamas/<chama_id>/members/<member_id>", methods=["PUT"])
 @token_required
 def update_member(chama_id, member_id, current_user=None):
-    allowed_roles = {"Treasurer"}
+    allowed_roles = {"Chairperson", "Treasurer"}
     actor_user, actor_membership, error_response = _actor_membership(current_user, chama_id, allowed_roles=allowed_roles)
     if error_response:
         return error_response
