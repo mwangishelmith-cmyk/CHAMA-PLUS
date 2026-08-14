@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
-from app import db
+from extensions import db
 
 
 # Abstract base so SQLAlchemy does not create a separate table for shared fields.
@@ -130,6 +130,15 @@ class ChamaCreationRequest(BaseModel):
 class ChamaAccount(BaseModel):
     __tablename__ = "chama_accounts"
 
+    __table_args__ = (
+        db.Index(
+            "uq_chama_primary_account",
+            "chama_id",
+            unique=True,
+            sqlite_where=db.text("is_primary = 1")
+        ),
+    )
+
     chama_id = db.Column(db.String(36), db.ForeignKey("chamas.id"), nullable=False)
     account_name = db.Column(db.String(255), nullable=False)
     institution_name = db.Column(db.String(255), nullable=True)
@@ -140,6 +149,7 @@ class ChamaAccount(BaseModel):
     last_reconciled_date = db.Column(db.DateTime, nullable=True)
     reconciliation_status = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    is_primary = db.Column(db.Boolean,default=False,nullable=False)
 
     chama = db.relationship("Chama", back_populates="chama_accounts")
     ledger_entries = db.relationship("LedgerEntry", back_populates="chama_account", cascade="all, delete-orphan")
