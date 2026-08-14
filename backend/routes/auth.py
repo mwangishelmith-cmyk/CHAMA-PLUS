@@ -5,7 +5,7 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
-from app import db
+from extensions import db
 from models import MemberProfile, User
 
 
