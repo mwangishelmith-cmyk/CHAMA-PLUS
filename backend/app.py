@@ -25,7 +25,7 @@ def create_app(config_class=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    CORS(app)
+    CORS(app, origins=["http://localhost:8080", "https://your-frontend.com"])
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(ledger_bp)
