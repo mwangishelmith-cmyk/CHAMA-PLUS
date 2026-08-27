@@ -37,9 +37,4 @@ export const tokenStorage = {
     if (!isBrowser) return;
     [ACCESS_KEY, REFRESH_KEY, USER_KEY].forEach((k) => window.localStorage.removeItem(k));
   },
-
-  isAuthenticated() {
-    if (!isBrowser) return false;
-    return !!window.localStorage.getItem(ACCESS_KEY);
-  },
 };

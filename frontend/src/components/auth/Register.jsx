@@ -10,14 +10,21 @@ import { useToast } from "../../context/ToastContext";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Account creation form. On success the user is signed in immediately. */
+/**
+ * Account creation form.
+ *
+ * Fields mirror `POST /auth/register` exactly: full_name, email, password and
+ * an optional phone_number. There is deliberately NO role picker — a chama
+ * role lives on the member profile and is assigned by a chama official when a
+ * join request is approved (or by the platform admin approving a new chama).
+ */
 export function Register({ redirectTo = "/dashboard" }) {
   const { register, submitting } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
   const [values, setValues] = useState({
-    name: "",
+    full_name: "",
     email: "",
     phone_number: "",
     password: "",
@@ -33,14 +40,12 @@ export function Register({ redirectTo = "/dashboard" }) {
 
   const validate = () => {
     const next = {};
-    if (values.name.trim().length < 2) next.name = "Please enter your full name.";
+    if (values.full_name.trim().length < 2) next.full_name = "Please enter your full name.";
     if (!EMAIL_RE.test(values.email)) next.email = "Enter a valid email address.";
-    if (values.phone_number.trim().length < 10) 
-      next.phone_number = "Enter a valid phone number.";
-      setErrors(next);
     if (values.password.length < 6) next.password = "Use at least 6 characters.";
     if (values.password !== values.confirmPassword)
       next.confirmPassword = "Passwords do not match.";
+    setErrors(next);
     return Object.keys(next).length === 0;
   };
 
@@ -49,13 +54,13 @@ export function Register({ redirectTo = "/dashboard" }) {
     setFormError(null);
     if (!validate()) return;
     try {
-      const user = await register({
-        full_name: values.name.trim(),
+      const ctx = await register({
+        full_name: values.full_name.trim(),
         email: values.email.trim(),
-        phone_number: values.phone_number.trim(),
         password: values.password,
+        phone_number: values.phone_number.trim() || null,
       });
-      toast.success(`Account created. Welcome, ${user.full_name}.`);
+      toast.success(`Account created. Welcome, ${ctx.user.full_name}.`);
       navigate({ to: redirectTo || "/dashboard", replace: true });
     } catch (err) {
       setFormError(err.message);
@@ -76,12 +81,12 @@ export function Register({ redirectTo = "/dashboard" }) {
 
       <Input
         label="Full name"
-        name="name"
+        name="full_name"
         autoComplete="name"
         placeholder="Grace Wanjiru"
-        value={values.name}
-        onChange={change("name")}
-        error={errors.name}
+        value={values.full_name}
+        onChange={change("full_name")}
+        error={errors.full_name}
         leadingIcon={<User className="h-4 w-4" />}
         required
       />
@@ -104,12 +109,12 @@ export function Register({ redirectTo = "/dashboard" }) {
         type="tel"
         name="phone_number"
         autoComplete="tel"
-        placeholder="0712345678"
+        placeholder="+254 7xx xxx xxx"
         value={values.phone_number}
         onChange={change("phone_number")}
         error={errors.phone_number}
+        hint="Optional — helps chama officials identify you."
         leadingIcon={<Phone className="h-4 w-4" />}
-        required
       />
 
       <Input
@@ -139,12 +144,16 @@ export function Register({ redirectTo = "/dashboard" }) {
         required
       />
 
+      <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+        Your chama role is assigned by a chama official after you join or create a chama.
+      </p>
+
       <Button type="submit" fullWidth loading={submitting}>
         {submitting ? "Creating account…" : "Create account"}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already registered?{" "}
+        Already have an account?{" "}
         <Link to="/login" className="font-medium text-primary hover:underline">
           Sign in
         </Link>

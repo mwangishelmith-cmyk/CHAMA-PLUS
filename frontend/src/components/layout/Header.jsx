@@ -4,12 +4,15 @@ import { ChevronDown, LogOut, Menu, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import useAuth from "../../hooks/useAuth";
+import { useChama } from "../../context/ChamaContext";
 import { useToast } from "../../context/ToastContext";
+import { roleLabel } from "../../lib/roles";
 import ThemeToggle from "./ThemeToggle";
 
 /** Sticky app header with the brand, mobile menu trigger and user menu. */
 export function Header({ onMenuClick }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin } = useAuth();
+  const { role, membership } = useChama();
   const toast = useToast();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -34,7 +37,7 @@ export function Header({ onMenuClick }) {
     navigate({ to: "/login", replace: true });
   };
 
-  const initials = (user?.name || "U")
+  const initials = (user?.full_name || "U")
     .split(" ")
     .map((part) => part[0])
     .slice(0, 2)
@@ -75,7 +78,7 @@ export function Header({ onMenuClick }) {
                 {initials}
               </span>
               <span className="hidden max-w-[10rem] truncate text-sm font-medium text-foreground sm:inline">
-                {user?.name}
+                {user?.full_name}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </button>
@@ -86,8 +89,16 @@ export function Header({ onMenuClick }) {
                 className="absolute right-0 mt-2 w-60 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
               >
                 <div className="border-b border-border px-4 py-3">
-                  <p className="truncate text-sm font-semibold">{user?.name}</p>
+                  <p className="truncate text-sm font-semibold">{user?.full_name}</p>
                   <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                  {/* Current role — makes RBAC behaviour visible to the user. */}
+                  <span className="mt-2 inline-flex items-center rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    {isSuperAdmin
+                      ? "Platform admin"
+                      : membership
+                        ? `${roleLabel(role)} · ${membership.chama_name || "Chama"}`
+                        : "No chama yet"}
+                  </span>
                 </div>
                 <button
                   type="button"

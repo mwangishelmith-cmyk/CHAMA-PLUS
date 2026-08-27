@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../context/AuthContext";
+import { ChamaProvider } from "../context/ChamaContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import { ToastProvider } from "../context/ToastContext";
 
@@ -133,8 +134,11 @@ function RootComponent() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
+            {/* Current-chama context depends on the session's membership list. */}
+            <ChamaProvider>
+              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+              <Outlet />
+            </ChamaProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

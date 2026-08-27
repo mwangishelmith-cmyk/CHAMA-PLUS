@@ -39,8 +39,8 @@ export function Login({ redirectTo = "/dashboard" }) {
     setFormError(null);
     if (!validate()) return;
     try {
-      const user = await login(values);
-      toast.success(`Welcome back, ${user.name}.`);
+      const ctx = await login(values);
+      toast.success(`Welcome back, ${ctx.user.full_name}.`);
       // Redirect behaviour: back to the blocked page, otherwise the dashboard.
       navigate({ to: redirectTo || "/dashboard", replace: true });
     } catch (err) {

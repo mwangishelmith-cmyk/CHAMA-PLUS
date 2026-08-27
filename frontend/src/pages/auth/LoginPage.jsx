@@ -12,20 +12,21 @@ export function LoginPage({ redirectTo = "/dashboard" }) {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const safeRedirect =
+      redirectTo &&
+      redirectTo !== "/unauthorized" &&
+      redirectTo.startsWith("/")
+        ? redirectTo
+        : "/dashboard";
+
     if (!initializing && isAuthenticated) {
-      navigate({ to: redirectTo || "/dashboard", replace: true });
+      navigate({ to: safeRedirect, replace: true });
     }
   }, [initializing, isAuthenticated, navigate, redirectTo]);
 
   return (
     <AuthLayout title="Sign in" subtitle="Welcome back. Enter your details to continue.">
       <Login redirectTo={redirectTo} />
-      {/* {usingMockApi && (
-        <p className="mt-5 rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
-          Demo mode: no API configured, so accounts are stored locally. Register once, then sign
-          in with the same details.
-        </p>
-      )} */}
     </AuthLayout>
   );
 }

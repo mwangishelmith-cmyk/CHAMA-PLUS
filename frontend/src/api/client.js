@@ -1,19 +1,22 @@
 import axios from "axios";
+
 import { tokenStorage } from "./tokenStorage";
 
 /**
- * Base URL comes from the environment. When it is missing we fall back to the
- * bundled mock backend so the whole auth flow is testable without a server.
+ * Axios instance for the ChamaPlus Flask API.
+ *
+ * Base URL: `VITE_API_URL` when provided, otherwise the local Flask default
+ * (`http://localhost:5000/api/v1`). Every blueprint is registered under
+ * `/api/v1`, so paths below are written relative to it (e.g. `/auth/login`).
  */
-const API_URL = import.meta.env.VITE_API_URL || "/api";
-const TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT) || 15000;
+const baseURL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000/api/v1";
+
+export const apiBaseUrl = baseURL;
 
 const apiClient = axios.create({
-  baseURL: API_URL,
-  timeout: TIMEOUT,
-  headers: { 
-    "Content-Type": "application/json" ,
-  },
+  baseURL,
+  timeout: 20000,
+  headers: { "Content-Type": "application/json" },
 });
 
 /* ------------------------------------------------------------------ */
@@ -25,104 +28,100 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-},
-  (error) => Promise.reject(error)
-);
+});
 
 /* ------------------------------------------------------------------ */
-/* Response interceptor: transparent refresh on 401                    */
+/* Response interceptor                                                */
 /* ------------------------------------------------------------------ */
 
-// Callbacks waiting for an in-flight refresh, so concurrent 401s trigger
-// exactly one refresh request.
-let isRefreshing = false;
-let refreshSubscribers = [];
 const sessionExpiredHandlers = new Set();
+const forbiddenHandlers = new Set();
 
+/** Fired when the backend rejects the token (401) — the app signs the user out. */
 export function onSessionExpired(handler) {
   sessionExpiredHandlers.add(handler);
   return () => sessionExpiredHandlers.delete(handler);
 }
 
-function subscribeTokenRefresh(cb) {
-  refreshSubscribers.push(cb);
+/** Fired on 403 so the shell can surface a permission message. */
+export function onForbidden(handler) {
+  forbiddenHandlers.add(handler);
+  return () => forbiddenHandlers.delete(handler);
 }
 
-function onTokenRefreshed(accessToken) {
-  refreshSubscribers.forEach(cb => cb(accessToken));
-  refreshSubscribers = [];
-}
+/**
+ * Token refresh is intentionally dormant: the current backend issues a single
+ * 1-day access token and exposes no `/auth/refresh` endpoint. The plumbing is
+ * kept so refresh can be switched on by setting `VITE_API_REFRESH_PATH`
+ * once the backend supports it.
+ */
+const REFRESH_PATH = import.meta.env.VITE_API_REFRESH_PATH || null;
+let refreshPromise = null;
 
 async function refreshTokens() {
   const refreshToken = tokenStorage.getRefreshToken();
-  if (!refreshToken) throw new Error("No refresh token");
-
+  if (!REFRESH_PATH || !refreshToken) throw new Error("Refresh not supported");
   const { data } = await apiClient.post(
-    "/auth/refresh",
+    REFRESH_PATH,
     { refreshToken },
     { skipAuth: true, skipRefresh: true },
   );
-  tokenStorage.setTokens(data);
-  return data.accessToken;
+  tokenStorage.setTokens({ accessToken: data.token || data.accessToken });
+  return tokenStorage.getAccessToken();
+}
+
+function notifySessionExpired() {
+  tokenStorage.clear();
+  sessionExpiredHandlers.forEach((handler) => handler());
 }
 
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const original = error.config;
+    const original = error.config || {};
+    const status = error.response?.status;
 
-      if (error.response?.status === 401 && !originalRequest._retry){
-      originalRequest._retry = true;
-      
-      if (isRefreshing) {
-        return new Promise((resolve) => {
-          subscribeTokenRefresh((accessToken) => {
-            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-            resolve(apiClient(originalRequest));
-          });
-        });
-      }
-      
-      isRefreshing = true;
-      
-      try {
-        const refreshToken = tokenStorage.getRefreshToken();
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
+    if (status === 401 && !original._retry && !original.skipRefresh) {
+      original._retry = true;
+      if (REFRESH_PATH && tokenStorage.getRefreshToken()) {
+        try {
+          refreshPromise =
+            refreshPromise ||
+            refreshTokens().finally(() => {
+              refreshPromise = null;
+            });
+          const accessToken = await refreshPromise;
+          original.headers = { ...original.headers, Authorization: `Bearer ${accessToken}` };
+          return apiClient(original);
+        } catch {
+          notifySessionExpired();
         }
-        
-        const response = await axios.post(
-          `${API_URL}/auth/refresh`,
-          { refreshToken },
-          { skipAuth: true, skipRefresh: true }
-        );
-        
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
-        tokenStorage.setTokens({ accessToken, refreshToken: newRefreshToken });
-        
-        isRefreshing = false;
-        onTokenRefreshed(accessToken);
-        
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        isRefreshing = false;
-        tokenStorage.clear();
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+      } else {
+        // No refresh endpoint: the session is simply over.
+        notifySessionExpired();
       }
     }
-    // Normalise the error message so UI code can always read `error.message`.
-    error.message = error.response?.data?.message || error.response?.data?.error || error.message || 'An unexpected error occurred';
+
+    if (status === 403) {
+      forbiddenHandlers.forEach((handler) => handler(error));
+    }
+
+    error.message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      (error.code === "ERR_NETWORK"
+        ? "Cannot reach the ChamaPlus API. Check that the backend is running."
+        : error.message) ||
+      "Something went wrong. Please try again.";
     return Promise.reject(error);
   },
 );
 
 /** Extract a user-facing message from any thrown API error. */
-export const getErrorMessage = (error) => {
-  return error.response?.data?.message || 
-         error.message || 
-         'Something went wrong. Please try again.';
-};
+export const getErrorMessage = (error) =>
+  error?.response?.data?.message || error?.message || "Unexpected error. Please try again.";
+
+/** True when the backend has no handler for this call (feature not deployed yet). */
+export const isNotImplemented = (error) => error?.response?.status === 404;
 
 export default apiClient;

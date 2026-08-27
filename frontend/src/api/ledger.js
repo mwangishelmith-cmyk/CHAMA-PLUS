@@ -1,68 +1,70 @@
-import apiClient from './client';
+import apiClient from "./client";
 
+/** Ledger API — routes/ledger.py + backend/routes/reporting.py. */
 export const ledgerApi = {
-  // Add contribution - POST /api/v1/chamas/{chama_id}/ledger/contribution
-  addContribution: async (chamaId, data) => {
-    const response = await apiClient.post(`/chamas/${chamaId}/ledger/contribution`, data);
-    // Returns: { ledger_entry_id, previous_balance, new_balance }
-    return response.data;
+  /**
+   * GET /chamas/{chamaId}/ledger/member/{memberId}
+   * -> { member_id, statement[], outstanding_debt, payments, fines }
+   * Members may only read their own statement (backend enforces it).
+   */
+  memberStatement: async (chamaId, memberId) => {
+  const { data } = await apiClient.get(
+    `/chamas/${chamaId}/ledger/member/${memberId}`,
+  );
+
+  return {
+    ...data,
+    statement: (data.statement || []).map((entry) => ({
+      ...entry,
+      date: entry.transaction_date,
+      type: entry.transaction_type,
+      description: entry.transaction_subtype || entry.transaction_type,
+    })),
+  };
   },
-  
-  // Add payment - POST /api/v1/chamas/{chama_id}/ledger/payment
-  addPayment: async (chamaId, data) => {
-    const response = await apiClient.post(`/chamas/${chamaId}/ledger/payment`, data);
-    // Returns: { ledger_entry_id, previous_balance, new_balance }
-    return response.data;
-  },
-  
-  // Apply fine - POST /api/v1/chamas/{chama_id}/ledger/fine
-  applyFine: async (chamaId, data) => {
-    const response = await apiClient.post(`/chamas/${chamaId}/ledger/fine`, data);
-    // Returns: { ledger_entry_id, previous_balance, new_balance }
-    return response.data;
-  },
-  
-  // Add adjustment - POST /api/v1/chamas/{chama_id}/ledger/adjustment
-  addAdjustment: async (chamaId, data) => {
-    const response = await apiClient.post(`/chamas/${chamaId}/ledger/adjustment`, data);
-    // Returns: { ledger_entry_id, previous_balance, new_balance }
-    return response.data;
-  },
-  
-  // Get member statement - GET /api/v1/chamas/{chama_id}/ledger/member/{member_id}
-  getMemberStatement: async (chamaId, memberId) => {
-    const response = await apiClient.get(`/chamas/${chamaId}/ledger/member/${memberId}`);
-    // Returns: { member_id, statement, outstanding_debt, payments, fines }
-    return response.data;
-  },
-  
-  // Get chama balance - GET /api/v1/chamas/{chama_id}/ledger/balance
-  getChamaBalance: async (chamaId) => {
-    const response = await apiClient.get(`/chamas/${chamaId}/ledger/balance`);
-    // Returns: { total_balance, total_contributions, total_fines, total_debt }
-    return response.data;
-  },
-  
-  // Get all members ledger summary - GET /api/v1/chamas/{chama_id}/ledger/all-members
-  getAllMembersLedgerSummary: async (chamaId) => {
-    const response = await apiClient.get(`/chamas/${chamaId}/ledger/all-members`);
-    // Returns array of { member_name, debt_balance, last_payment, status }
-    return response.data;
-  },
-  
-  // Reconcile account - POST /api/v1/chamas/{chama_id}/accounts/{account_id}/reconcile
-  reconcileAccount: async (chamaId, accountId, data) => {
-    const response = await apiClient.post(`/chamas/${chamaId}/accounts/${accountId}/reconcile`, data);
-    // Returns: { account_id, reconciliation_status, last_reconciled_date }
-    return response.data;
-  },
-  
-  // Add chama account - POST /api/v1/chamas/{chama_id}/accounts
-  addAccount: async (chamaId, data) => {
-    const response = await apiClient.post(`/chamas/${chamaId}/accounts`, data);
-    // Returns: account details
-    return response.data;
-  }
+  /** GET /chamas/{chamaId}/ledger/balance — Chairperson/Treasurer only. */
+  chamaBalance: async (chamaId) => (await apiClient.get(`/chamas/${chamaId}/ledger/balance`)).data,
+
+  /** GET /chamas/{chamaId}/ledger/all-members — Chairperson/Treasurer only. */
+  allMembers: async (chamaId) =>
+    (await apiClient.get(`/chamas/${chamaId}/ledger/all-members`)).data,
+
+  /** POST /chamas/{chamaId}/ledger/payment — Treasurer only. */
+  recordPayment: async (chamaId, { member_id, amount, reference, payment_method }) =>
+    (
+      await apiClient.post(`/chamas/${chamaId}/ledger/payment`, {
+        member_id,
+        amount,
+        reference: reference || null,
+        payment_method: payment_method || null,
+      })
+    ).data,
+
+  /** POST /chamas/{chamaId}/ledger/contribution — Treasurer only. */
+  recordContribution: async (chamaId, body) =>
+    (await apiClient.post(`/chamas/${chamaId}/ledger/contribution`, body)).data,
+
+  /** GET /chamas/{chamaId}/ledger/entries — treasurer view of every member entry. */
+  chamaEntries: async (chamaId) => (await apiClient.get(`/chamas/${chamaId}/ledger/entries`)).data,
+
+    // frontend/src/api/ledger.js
+
+  recordFine: async (chamaId, body) =>
+    (await apiClient.post(`/chamas/${chamaId}/ledger/fine`, body)).data,
+
+  recordAdjustment: async (chamaId, body) =>
+    (await apiClient.post(`/chamas/${chamaId}/ledger/adjustment`, body)).data,
+
+  reconcileAccount: async (chamaId, accountId, bank_statement_balance) =>
+    (
+      await apiClient.post(
+        `/chamas/${chamaId}/accounts/${accountId}/reconcile`,
+        { bank_statement_balance },
+      )
+    ).data,
+
+  verifyIntegrity: async (chamaId) =>
+    (await apiClient.get(`/chamas/${chamaId}/ledger/verify`)).data,
 };
 
 export default ledgerApi;
